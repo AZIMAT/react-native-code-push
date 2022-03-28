@@ -31,6 +31,10 @@
     long long _latestExpectedContentLength;
     long long _latestReceivedConentLength;
     BOOL _didUpdateProgress;
+    
+    BOOL _allowed;
+    BOOL _restartInProgress;
+    NSMutableArray *_restartQueue;
 }
 
 RCT_EXPORT_MODULE()
@@ -72,6 +76,12 @@ static NSBundle *bundleResourceBundle = nil;
 static NSString *bundleResourceExtension = @"jsbundle";
 static NSString *bundleResourceName = @"main";
 static NSString *bundleResourceSubdirectory = nil;
+
+// These keys represent the names we use to store information about the latest rollback
+static NSString *const LatestRollbackInfoKey = @"LATEST_ROLLBACK_INFO";
+static NSString *const LatestRollbackPackageHashKey = @"packageHash";
+static NSString *const LatestRollbackTimeKey = @"time";
+static NSString *const LatestRollbackCountKey = @"count";
 
 + (void)initialize
 {
@@ -363,8 +373,11 @@ static NSString *bundleResourceSubdirectory = nil;
 
 - (instancetype)init
 {
+    _allowed = YES;
+    _restartInProgress = NO;
+    _restartQueue = [NSMutableArray arrayWithCapacity:1];
+    
     self = [super init];
-
     if (self) {
         [self initializeUpdateAfterRestart];
     }
@@ -400,6 +413,64 @@ static NSString *bundleResourceSubdirectory = nil;
             [self savePendingUpdate:pendingUpdate[PendingUpdateHashKey]
                           isLoading:YES];
         }
+    }
+}
+
+/*
+ * This method is used to get information about the latest rollback.
+ * This information will be used to decide whether the application
+ * should ignore the update or not.
+ */
++ (NSDictionary *)getLatestRollbackInfo
+{
+    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+    NSDictionary *latestRollbackInfo = [preferences objectForKey:LatestRollbackInfoKey];
+    return latestRollbackInfo;
+}
+
+/*
+ * This method is used to save information about the latest rollback.
+ * This information will be used to decide whether the application
+ * should ignore the update or not.
+ */
++ (void)setLatestRollbackInfo:(NSString*)packageHash
+{
+    if (packageHash == nil) {
+        return;
+    }
+
+    NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+    NSMutableDictionary *latestRollbackInfo = [preferences objectForKey:LatestRollbackInfoKey];
+    if (latestRollbackInfo == nil) {
+        latestRollbackInfo = [[NSMutableDictionary alloc] init];
+    } else {
+        latestRollbackInfo = [latestRollbackInfo mutableCopy];
+    }
+
+    int initialRollbackCount = [self getRollbackCountForPackage: packageHash fromLatestRollbackInfo: latestRollbackInfo];
+    NSNumber *count = [NSNumber numberWithInt: initialRollbackCount + 1];
+    NSNumber *currentTimeMillis = [NSNumber numberWithDouble: [[NSDate date] timeIntervalSince1970] * 1000];
+
+    [latestRollbackInfo setValue:count forKey:LatestRollbackCountKey];
+    [latestRollbackInfo setValue:currentTimeMillis forKey:LatestRollbackTimeKey];
+    [latestRollbackInfo setValue:packageHash forKey:LatestRollbackPackageHashKey];
+
+    [preferences setObject:latestRollbackInfo forKey:LatestRollbackInfoKey];
+    [preferences synchronize];
+}
+
+/*
+ * This method is used to get the count of rollback for the package
+ * using the latest rollback information.
+ */
++ (int)getRollbackCountForPackage:(NSString*) packageHash fromLatestRollbackInfo:(NSMutableDictionary*) latestRollbackInfo
+{
+    NSString *oldPackageHash = [latestRollbackInfo objectForKey:LatestRollbackPackageHashKey];
+    if ([packageHash isEqualToString: oldPackageHash]) {
+        NSNumber *oldCount = [latestRollbackInfo objectForKey:LatestRollbackCountKey];
+        return [oldCount intValue];
+    } else {
+        return 0;
     }
 }
 
@@ -508,6 +579,10 @@ static NSString *bundleResourceSubdirectory = nil;
  */
 - (void)saveFailedUpdate:(NSDictionary *)failedPackage
 {
+    if ([[self class] isFailedHash:[failedPackage objectForKey:PackageHashKey]]) {
+        return;
+    }
+    
     NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
     NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
     if (failedUpdates == nil) {
@@ -568,25 +643,41 @@ static NSString *bundleResourceSubdirectory = nil;
     return @[DownloadProgressEvent];
 }
 
+// Determine how long the app was in the background
+- (int)getDurationInBackground
+{
+    int duration = 0;
+    if (_lastResignedDate) {
+        duration = [[NSDate date] timeIntervalSinceDate:_lastResignedDate];
+    }
+
+    return duration;
+}
+
 #pragma mark - Application lifecycle event handlers
 
-// These two handlers will only be registered when there is
+// These three handlers will only be registered when there is
 // a resume-based update still pending installation.
+- (void)applicationDidBecomeActive
+{
+    if (_installMode == CodePushInstallModeOnNextSuspend) {
+        int durationInBackground = [self getDurationInBackground];
+        // We shouldn't use loadBundle in this case, because _appSuspendTimer will call loadBundleOnTick.
+        // We should cancel timer for _appSuspendTimer because otherwise, we would call loadBundle two times.
+        if (durationInBackground < _minimumBackgroundDuration) {
+            [_appSuspendTimer invalidate];
+            _appSuspendTimer = nil;
+        }
+    }
+}
+
 - (void)applicationWillEnterForeground
 {
-    if (_appSuspendTimer) {
-        [_appSuspendTimer invalidate];
-        _appSuspendTimer = nil;
-    }
-    // Determine how long the app was in the background and ensure
-    // that it meets the minimum duration amount of time.
-    int durationInBackground = 0;
-    if (_lastResignedDate) {
-        durationInBackground = [[NSDate date] timeIntervalSinceDate:_lastResignedDate];
-    }
-
-    if (durationInBackground >= _minimumBackgroundDuration) {
-        [self loadBundle];
+    if (_installMode == CodePushInstallModeOnNextResume) {
+        int durationInBackground = [self getDurationInBackground];
+        if (durationInBackground >= _minimumBackgroundDuration) {
+            [self restartAppInternal:NO];
+        }
     }
 }
 
@@ -606,7 +697,7 @@ static NSString *bundleResourceSubdirectory = nil;
 }
 
 -(void)loadBundleOnTick:(NSTimer *)timer {
-    [self loadBundle];
+    [self restartAppInternal:NO];
 }
 
 #pragma mark - JavaScript-exported module methods (Public)
@@ -676,6 +767,33 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSDictionary*)updatePackage
             self.paused = YES;
             reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
         }];
+}
+
+- (void)restartAppInternal:(BOOL)onlyIfUpdateIsPending
+{
+    if (_restartInProgress) {
+        CPLog(@"Restart request queued until the current restart is completed.");
+        [_restartQueue addObject:@(onlyIfUpdateIsPending)];
+        return;
+    } else if (!_allowed) {
+        CPLog(@"Restart request queued until restarts are re-allowed.");
+        [_restartQueue addObject:@(onlyIfUpdateIsPending)];
+        return;
+    }
+
+    _restartInProgress = YES;
+    if (!onlyIfUpdateIsPending || [[self class] isPendingUpdate:nil]) {
+        [self loadBundle];
+        CPLog(@"Restarting app.");
+        return;
+    }
+
+    _restartInProgress = NO;
+    if ([_restartQueue count] > 0) {
+        BOOL buf = [_restartQueue valueForKey: @"@firstObject"];
+        [_restartQueue removeObjectAtIndex:0];
+        [self restartAppInternal:buf];
+    }
 }
 
 /*
@@ -792,6 +910,11 @@ RCT_EXPORT_METHOD(installUpdate:(NSDictionary*)updatePackage
                 // Register for app resume notifications so that we
                 // can check for pending updates which support "restart on resume"
                 [[NSNotificationCenter defaultCenter] addObserver:self
+                                                         selector:@selector(applicationDidBecomeActive)
+                                                             name:UIApplicationDidBecomeActiveNotification
+                                                           object:RCTSharedApplication()];
+                                                           
+                [[NSNotificationCenter defaultCenter] addObserver:self
                                                          selector:@selector(applicationWillEnterForeground)
                                                              name:UIApplicationWillEnterForegroundNotification
                                                            object:RCTSharedApplication()];
@@ -822,6 +945,22 @@ RCT_EXPORT_METHOD(isFailedUpdate:(NSString *)packageHash
     resolve(@(isFailedHash));
 }
 
+RCT_EXPORT_METHOD(setLatestRollbackInfo:(NSString *)packageHash
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+    [[self class] setLatestRollbackInfo:packageHash];
+    resolve(nil);
+}
+
+
+RCT_EXPORT_METHOD(getLatestRollbackInfo:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *latestRollbackInfo = [[self class] getLatestRollbackInfo];
+    resolve(latestRollbackInfo);
+}
+
 /*
  * This method isn't publicly exposed via the "react-native-code-push"
  * module, and is only used internally to populate the LocalPackage.isFirstRun property.
@@ -849,6 +988,37 @@ RCT_EXPORT_METHOD(notifyApplicationReady:(RCTPromiseResolveBlock)resolve
     resolve(nil);
 }
 
+RCT_EXPORT_METHOD(allow:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
+{
+    CPLog(@"Re-allowing restarts.");
+    _allowed = YES;
+
+    if ([_restartQueue count] > 0) {
+        CPLog(@"Executing pending restart.");
+        BOOL buf = [_restartQueue valueForKey: @"@firstObject"];
+        [_restartQueue removeObjectAtIndex:0];
+        [self restartAppInternal:buf];
+    }
+
+    resolve(nil);
+}
+
+RCT_EXPORT_METHOD(clearPendingRestart:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
+{
+    [_restartQueue removeAllObjects];
+    resolve(nil);
+}
+
+RCT_EXPORT_METHOD(disallow:(RCTPromiseResolveBlock)resolve
+                    rejecter:(RCTPromiseRejectBlock)reject)
+{
+    CPLog(@"Disallowing restarts.");
+    _allowed = NO;
+    resolve(nil);
+}
+
 /*
  * This method is the native side of the CodePush.restartApp() method.
  */
@@ -856,15 +1026,8 @@ RCT_EXPORT_METHOD(restartApp:(BOOL)onlyIfUpdateIsPending
                      resolve:(RCTPromiseResolveBlock)resolve
                     rejecter:(RCTPromiseRejectBlock)reject)
 {
-    // If this is an unconditional restart request, or there
-    // is current pending update, then reload the app.
-    if (!onlyIfUpdateIsPending || [[self class] isPendingUpdate:nil]) {
-        [self loadBundle];
-        resolve(@(YES));
-        return;
-    }
-
-    resolve(@(NO));
+    [self restartAppInternal:onlyIfUpdateIsPending];
+    resolve(nil);
 }
 
 /*

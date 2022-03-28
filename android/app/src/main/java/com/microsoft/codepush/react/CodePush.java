@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
-import android.support.annotation.NonNull;
 
 import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.ReactPackage;
@@ -21,6 +20,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.reflect.Method;
 
 public class CodePush implements ReactPackage {
 
@@ -40,7 +40,7 @@ public class CodePush implements ReactPackage {
 
     // Config properties.
     private String mDeploymentKey;
-    private static String mServerUrl = "https://codepush.azurewebsites.net/";
+    private static String mServerUrl = "https://codepush.appcenter.ms/";
 
     private Context mContext;
     private final boolean mIsDebugMode;
@@ -78,11 +78,17 @@ public class CodePush implements ReactPackage {
 
         mCurrentInstance = this;
 
+        String publicKeyFromStrings = getCustomPropertyFromStringsIfExist("PublicKey");
+        if (publicKeyFromStrings != null) mPublicKey = publicKeyFromStrings;
+
+        String serverUrlFromStrings = getCustomPropertyFromStringsIfExist("ServerUrl");
+        if (serverUrlFromStrings != null) mServerUrl = serverUrlFromStrings;
+
         clearDebugCacheIfNeeded(null);
         initializeUpdateAfterRestart();
     }
 
-    public CodePush(String deploymentKey, Context context, boolean isDebugMode, @NonNull String serverUrl) {
+    public CodePush(String deploymentKey, Context context, boolean isDebugMode, String serverUrl) {
         this(deploymentKey, context, isDebugMode);
         mServerUrl = serverUrl;
     }
@@ -93,7 +99,7 @@ public class CodePush implements ReactPackage {
         mPublicKey = getPublicKeyByResourceDescriptor(publicKeyResourceDescriptor);
     }
 
-    public CodePush(String deploymentKey, Context context, boolean isDebugMode, @NonNull String serverUrl, Integer publicKeyResourceDescriptor) {
+    public CodePush(String deploymentKey, Context context, boolean isDebugMode, String serverUrl, Integer publicKeyResourceDescriptor) {
         this(deploymentKey, context, isDebugMode);
 
         if (publicKeyResourceDescriptor != null) {
@@ -121,20 +127,50 @@ public class CodePush implements ReactPackage {
         return publicKey;
     }
 
-    public void clearDebugCacheIfNeeded(ReactInstanceManager instanceManager) {
-        boolean isLiveReloadEnabled = false;
+    private String getCustomPropertyFromStringsIfExist(String propertyName) {
+        String property;
+      
+        String packageName = mContext.getPackageName();
+        int resId = mContext.getResources().getIdentifier("CodePush" + propertyName, "string", packageName);
+        
+        if (resId != 0) {
+            property = mContext.getString(resId);
 
-        // Use instanceManager for checking if we use LiveRelaod mode. In this case we should not remove ReactNativeDevBundle.js file
-        // because we get error with trying to get this after reloading. Issue: https://github.com/Microsoft/react-native-code-push/issues/1272
+            if (!property.isEmpty()) {
+                return property;
+            } else {
+                CodePushUtils.log("Specified " + propertyName + " is empty");
+            } 
+        }
+
+        return null;
+    }
+
+    private boolean isLiveReloadEnabled(ReactInstanceManager instanceManager) {
+        // Use instanceManager for checking if we use LiveReload mode. In this case we should not remove ReactNativeDevBundle.js file
+        // because we get error with trying to get this after reloading. Issue: https://github.com/microsoft/react-native-code-push/issues/1272
         if (instanceManager != null) {
             DevSupportManager devSupportManager = instanceManager.getDevSupportManager();
             if (devSupportManager != null) {
                 DevInternalSettings devInternalSettings = (DevInternalSettings)devSupportManager.getDevSettings();
-                isLiveReloadEnabled = devInternalSettings.isReloadOnJSChangeEnabled();
+                Method[] methods = devInternalSettings.getClass().getMethods();
+                for (Method m : methods) {
+                    if (m.getName().equals("isReloadOnJSChangeEnabled")) {
+                        try {
+                            return (boolean) m.invoke(devInternalSettings);
+                        } catch (Exception x) {
+                            return false;
+                        }
+                    }
+                }
             }
         }
 
-        if (mIsDebugMode && mSettingsManager.isPendingUpdate(null) && !isLiveReloadEnabled) {
+        return false;
+    }
+
+    public void clearDebugCacheIfNeeded(ReactInstanceManager instanceManager) {
+        if (mIsDebugMode && mSettingsManager.isPendingUpdate(null) && !isLiveReloadEnabled(instanceManager)) {
             // This needs to be kept in sync with https://github.com/facebook/react-native/blob/master/ReactAndroid/src/main/java/com/facebook/react/devsupport/DevSupportManager.java#L78
             File cachedDevBundle = new File(mContext.getFilesDir(), "ReactNativeDevBundle.js");
             if (cachedDevBundle.exists()) {
@@ -164,7 +200,7 @@ public class CodePush implements ReactPackage {
             String packageName = this.mContext.getPackageName();
             int codePushApkBuildTimeId = this.mContext.getResources().getIdentifier(CodePushConstants.CODE_PUSH_APK_BUILD_TIME_KEY, "string", packageName);
             // replace double quotes needed for correct restoration of long value from strings.xml
-            // https://github.com/Microsoft/cordova-plugin-code-push/issues/264
+            // https://github.com/microsoft/cordova-plugin-code-push/issues/264
             String codePushApkBuildTime = this.mContext.getResources().getString(codePushApkBuildTimeId).replaceAll("\"","");
             return Long.parseLong(codePushApkBuildTime);
         } catch (Exception e) {
@@ -214,7 +250,15 @@ public class CodePush implements ReactPackage {
         this.mAssetsBundleFileName = assetsBundleFileName;
         String binaryJsBundleUrl = CodePushConstants.ASSETS_BUNDLE_PREFIX + assetsBundleFileName;
 
-        String packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
+        String packageFilePath = null;
+        try {
+            packageFilePath = mUpdateManager.getCurrentPackageBundlePath(this.mAssetsBundleFileName);
+        } catch (CodePushMalformedDataException e) {
+            // We need to recover the app in case 'codepush.json' is corrupted
+            CodePushUtils.log(e.getMessage());
+            clearUpdates();
+        }
+
         if (packageFilePath == null) {
             // There has not been any downloaded updates.
             CodePushUtils.logBundleUrl(binaryJsBundleUrl);

@@ -2,7 +2,6 @@ import { AcquisitionManager as Sdk } from "code-push/script/acquisition-sdk";
 import { Alert } from "./AlertAdapter";
 import requestFetchAdapter from "./request-fetch-adapter";
 import { AppState, Platform } from "react-native";
-import RestartManager from "./RestartManager";
 import log from "./logging";
 import hoistStatics from 'hoist-non-react-statics';
 
@@ -39,7 +38,7 @@ async function checkForUpdate(deploymentKey = null, handleBinaryVersionMismatchC
    * then we want to use its package hash to determine whether a new
    * release has been made on the server. Otherwise, we only need
    * to send the app version to the server, since we are interested
-   * in any updates for current app store version, regardless of hash.
+   * in any updates for current binary version, regardless of hash.
    */
   let queryPackage;
   if (localPackage) {
@@ -58,7 +57,7 @@ async function checkForUpdate(deploymentKey = null, handleBinaryVersionMismatchC
    * ----------------------------------------------------------------
    * 1) The server said there isn't an update. This is the most common case.
    * 2) The server said there is an update but it requires a newer binary version.
-   *    This would occur when end-users are running an older app store version than
+   *    This would occur when end-users are running an older binary version than
    *    is available, and CodePush is making sure they don't get an update that
    *    potentially wouldn't be compatible with what they are running.
    * 3) The server said there is an update, but the update's hash is the same as
@@ -189,6 +188,10 @@ async function tryReportStatus(statusReport, resumeListener) {
     if (statusReport.appVersion) {
       log(`Reporting binary update (${statusReport.appVersion})`);
 
+      if (!config.deploymentKey) {
+        throw new Error("Deployment key is missed");
+      }
+
       const sdk = getPromisifiedSdk(requestFetchAdapter, config);
       await sdk.reportStatusDeploy(/* deployedPackage */ null, /* status */ null, previousLabelOrAppVersion, previousDeploymentKey);
     } else {
@@ -197,6 +200,7 @@ async function tryReportStatus(statusReport, resumeListener) {
         log(`Reporting CodePush update success (${label})`);
       } else {
         log(`Reporting CodePush update rollback (${label})`);
+        await NativeCodePush.setLatestRollbackInfo(statusReport.package.packageHash);
       }
 
       config.deploymentKey = statusReport.package.deploymentKey;
@@ -225,6 +229,71 @@ async function tryReportStatus(statusReport, resumeListener) {
   }
 }
 
+async function shouldUpdateBeIgnored(remotePackage, syncOptions) {
+  let { rollbackRetryOptions } = syncOptions;
+
+  const isFailedPackage = remotePackage && remotePackage.failedInstall;
+  if (!isFailedPackage || !syncOptions.ignoreFailedUpdates) {
+    return false;
+  }
+
+  if (!rollbackRetryOptions) {
+    return true;
+  }
+
+  if (typeof rollbackRetryOptions !== "object") {
+    rollbackRetryOptions = CodePush.DEFAULT_ROLLBACK_RETRY_OPTIONS;
+  } else {
+    rollbackRetryOptions = { ...CodePush.DEFAULT_ROLLBACK_RETRY_OPTIONS, ...rollbackRetryOptions };
+  }
+
+  if (!validateRollbackRetryOptions(rollbackRetryOptions)) {
+    return true;
+  }
+
+  const latestRollbackInfo = await NativeCodePush.getLatestRollbackInfo();
+  if (!validateLatestRollbackInfo(latestRollbackInfo, remotePackage.packageHash)) {
+    log("The latest rollback info is not valid.");
+    return true;
+  }
+
+  const { delayInHours, maxRetryAttempts } = rollbackRetryOptions;
+  const hoursSinceLatestRollback = (Date.now() - latestRollbackInfo.time) / (1000 * 60 * 60);
+  if (hoursSinceLatestRollback >= delayInHours && maxRetryAttempts >= latestRollbackInfo.count) {
+    log("Previous rollback should be ignored due to rollback retry options.");
+    return false;
+  }
+
+  return true;
+}
+
+function validateLatestRollbackInfo(latestRollbackInfo, packageHash) {
+  return latestRollbackInfo &&
+    latestRollbackInfo.time &&
+    latestRollbackInfo.count &&
+    latestRollbackInfo.packageHash &&
+    latestRollbackInfo.packageHash === packageHash;
+}
+
+function validateRollbackRetryOptions(rollbackRetryOptions) {
+  if (typeof rollbackRetryOptions.delayInHours !== "number") {
+    log("The 'delayInHours' rollback retry parameter must be a number.");
+    return false;
+  }
+
+  if (typeof rollbackRetryOptions.maxRetryAttempts !== "number") {
+    log("The 'maxRetryAttempts' rollback retry parameter must be a number.");
+    return false;
+  }
+
+  if (rollbackRetryOptions.maxRetryAttempts < 1) {
+    log("The 'maxRetryAttempts' rollback retry parameter cannot be less then 1.");
+    return false;
+  }
+
+  return true;
+}
+
 var testConfig;
 
 // This function is only used for tests. Replaces the default SDK, configuration and native bridge
@@ -234,6 +303,10 @@ function setUpTestDependencies(testSdk, providedTestConfig, testNativeBridge) {
   if (testNativeBridge) NativeCodePush = testNativeBridge;
 }
 
+async function restartApp(onlyIfUpdateIsPending = false) {
+  NativeCodePush.restartApp(onlyIfUpdateIsPending);
+}
+
 // This function allows only one syncInternal operation to proceed at any given time.
 // Parallel calls to sync() while one is ongoing yields CodePush.SyncStatus.SYNC_IN_PROGRESS.
 const sync = (() => {
@@ -241,7 +314,7 @@ const sync = (() => {
   const setSyncCompleted = () => { syncInProgress = false; };
 
   return (options = {}, syncStatusChangeCallback, downloadProgressCallback, handleBinaryVersionMismatchCallback) => {
-    let syncStatusCallbackWithTryCatch, downloadProgressCallbackkWithTryCatch;
+    let syncStatusCallbackWithTryCatch, downloadProgressCallbackWithTryCatch;
     if (typeof syncStatusChangeCallback === "function") {
       syncStatusCallbackWithTryCatch = (...args) => {
         try {
@@ -253,7 +326,7 @@ const sync = (() => {
     }
 
     if (typeof downloadProgressCallback === "function") {
-      downloadProgressCallbackkWithTryCatch = (...args) => {
+      downloadProgressCallbackWithTryCatch = (...args) => {
         try {
           downloadProgressCallback(...args);
         } catch (error) {
@@ -270,7 +343,7 @@ const sync = (() => {
     }
 
     syncInProgress = true;
-    const syncPromise = syncInternal(options, syncStatusCallbackWithTryCatch, downloadProgressCallbackkWithTryCatch, handleBinaryVersionMismatchCallback);
+    const syncPromise = syncInternal(options, syncStatusCallbackWithTryCatch, downloadProgressCallbackWithTryCatch, handleBinaryVersionMismatchCallback);
     syncPromise
       .then(setSyncCompleted)
       .catch(setSyncCompleted);
@@ -293,6 +366,7 @@ async function syncInternal(options = {}, syncStatusChangeCallback, downloadProg
   const syncOptions = {
     deploymentKey: null,
     ignoreFailedUpdates: true,
+    rollbackRetryOptions: null,
     installMode: CodePush.InstallMode.ON_NEXT_RESTART,
     mandatoryInstallMode: CodePush.InstallMode.IMMEDIATE,
     minimumBackgroundDuration: 0,
@@ -360,7 +434,8 @@ async function syncInternal(options = {}, syncStatusChangeCallback, downloadProg
       return CodePush.SyncStatus.UPDATE_INSTALLED;
     };
 
-    const updateShouldBeIgnored = remotePackage && (remotePackage.failedInstall && syncOptions.ignoreFailedUpdates);
+    const updateShouldBeIgnored = await shouldUpdateBeIgnored(remotePackage, syncOptions);
+
     if (!remotePackage || updateShouldBeIgnored) {
       if (updateShouldBeIgnored) {
           log("An update is available, but it is being ignored due to having been previously rolled back.");
@@ -537,11 +612,11 @@ if (NativeCodePush) {
     log,
     notifyAppReady: notifyApplicationReady,
     notifyApplicationReady,
-    restartApp: RestartManager.restartApp,
+    restartApp,
     setUpTestDependencies,
     sync,
-    disallowRestart: RestartManager.disallow,
-    allowRestart: RestartManager.allow,
+    disallowRestart: NativeCodePush.disallow,
+    allowRestart: NativeCodePush.allow,
     clearUpdates: NativeCodePush.clearUpdates,
     InstallMode: {
       IMMEDIATE: NativeCodePush.codePushInstallModeImmediate, // Restart the app immediately
@@ -585,6 +660,10 @@ if (NativeCodePush) {
       optionalInstallButtonLabel: "Install",
       optionalUpdateMessage: "An update is available. Would you like to install it?",
       title: "Update available"
+    },
+    DEFAULT_ROLLBACK_RETRY_OPTIONS: {
+      delayInHours: 24,
+      maxRetryAttempts: 1
     }
   });
 } else {
