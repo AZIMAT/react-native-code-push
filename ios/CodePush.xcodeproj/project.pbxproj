@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		027E01DA2827E79F009DB2D2 /* DiffMatchPatch_Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = 027E01D82827E74A009DB2D2 /* DiffMatchPatch_Prefix.pch */; };
 		13BE3DEE1AC21097009241FE /* CodePush.m in Sources */ = {isa = PBXBuildFile; fileRef = 13BE3DED1AC21097009241FE /* CodePush.m */; };
 		1B23B9141BF9267B000BB2F0 /* RCTConvert+CodePushInstallMode.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B23B9131BF9267B000BB2F0 /* RCTConvert+CodePushInstallMode.m */; };
 		1B762E901C9A5E9A006EF800 /* CodePushErrorUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B762E8F1C9A5E9A006EF800 /* CodePushErrorUtils.m */; };
@@ -61,7 +62,6 @@
 		8482F84E1E24C66300F793DB /* CodePush.h in Headers */ = {isa = PBXBuildFile; fileRef = 13BE3DEC1AC21097009241FE /* CodePush.h */; };
 		DA44B1D0214555C600A55AC6 /* DiffMatchPatch.h in Headers */ = {isa = PBXBuildFile; fileRef = DA44B1C2214555C600A55AC6 /* DiffMatchPatch.h */; };
 		DA44B1D1214555C600A55AC6 /* DiffMatchPatchCFUtilities.c in Sources */ = {isa = PBXBuildFile; fileRef = DA44B1C3214555C600A55AC6 /* DiffMatchPatchCFUtilities.c */; settings = {COMPILER_FLAGS = "-fno-objc-arc"; }; };
-		DA44B1D2214555C600A55AC6 /* DiffMatchPatch_Prefix.pch in Headers */ = {isa = PBXBuildFile; fileRef = DA44B1C4214555C600A55AC6 /* DiffMatchPatch_Prefix.pch */; };
 		DA44B1D3214555C600A55AC6 /* NSString+UriCompatibility.h in Headers */ = {isa = PBXBuildFile; fileRef = DA44B1C5214555C600A55AC6 /* NSString+UriCompatibility.h */; };
 		DA44B1D4214555C600A55AC6 /* NSString+JavaSubstring.h in Headers */ = {isa = PBXBuildFile; fileRef = DA44B1C6214555C600A55AC6 /* NSString+JavaSubstring.h */; };
 		DA44B1D5214555C600A55AC6 /* NSMutableDictionary+DMPExtensions.h in Headers */ = {isa = PBXBuildFile; fileRef = DA44B1C7214555C600A55AC6 /* NSMutableDictionary+DMPExtensions.h */; };
@@ -147,6 +147,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		027E01D82827E74A009DB2D2 /* DiffMatchPatch_Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DiffMatchPatch_Prefix.pch; sourceTree = "<group>"; };
 		134814201AA4EA6300B7C361 /* libCodePush.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libCodePush.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		13BE3DEC1AC21097009241FE /* CodePush.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = CodePush.h; path = CodePush/CodePush.h; sourceTree = "<group>"; };
 		13BE3DED1AC21097009241FE /* CodePush.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = CodePush.m; path = CodePush/CodePush.m; sourceTree = "<group>"; };
@@ -194,7 +195,6 @@
 		81D51F391B6181C2000DA084 /* CodePushConfig.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = CodePushConfig.m; path = CodePush/CodePushConfig.m; sourceTree = "<group>"; };
 		DA44B1C2214555C600A55AC6 /* DiffMatchPatch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DiffMatchPatch.h; sourceTree = "<group>"; };
 		DA44B1C3214555C600A55AC6 /* DiffMatchPatchCFUtilities.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = DiffMatchPatchCFUtilities.c; sourceTree = "<group>"; };
-		DA44B1C4214555C600A55AC6 /* DiffMatchPatch_Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DiffMatchPatch_Prefix.pch; sourceTree = "<group>"; };
 		DA44B1C5214555C600A55AC6 /* NSString+UriCompatibility.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+UriCompatibility.h"; sourceTree = "<group>"; };
 		DA44B1C6214555C600A55AC6 /* NSString+JavaSubstring.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+JavaSubstring.h"; sourceTree = "<group>"; };
 		DA44B1C7214555C600A55AC6 /* NSMutableDictionary+DMPExtensions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSMutableDictionary+DMPExtensions.h"; sourceTree = "<group>"; };
@@ -380,7 +380,6 @@
 			children = (
 				DA44B1C2214555C600A55AC6 /* DiffMatchPatch.h */,
 				DA44B1C3214555C600A55AC6 /* DiffMatchPatchCFUtilities.c */,
-				DA44B1C4214555C600A55AC6 /* DiffMatchPatch_Prefix.pch */,
 				DA44B1C5214555C600A55AC6 /* NSString+UriCompatibility.h */,
 				DA44B1C6214555C600A55AC6 /* NSString+JavaSubstring.h */,
 				DA44B1C7214555C600A55AC6 /* NSMutableDictionary+DMPExtensions.h */,
@@ -392,6 +391,7 @@
 				DA44B1CD214555C600A55AC6 /* NSString+UnicharUtilities.h */,
 				DA44B1CE214555C600A55AC6 /* MinMaxMacros.h */,
 				DA44B1CF214555C600A55AC6 /* NSMutableDictionary+DMPExtensions.m */,
+				027E01D82827E74A009DB2D2 /* DiffMatchPatch_Prefix.pch */,
 			);
 			name = DiffMatchPatch;
 			path = CodePush/DiffMatchPatch;
@@ -584,6 +584,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				027E01DA2827E79F009DB2D2 /* DiffMatchPatch_Prefix.pch in Headers */,
 				F88664791F4AD1EE0036D01B /* JWTErrorDescription.h in Headers */,
 				F85736761F4F03BF00C9C00A /* MF_Base64Additions.h in Headers */,
 				F88664541F4AD1EE0036D01B /* JWTAlgorithmDataHolder.h in Headers */,
@@ -597,7 +598,6 @@
 				F88664631F4AD1EE0036D01B /* JWTClaim.h in Headers */,
 				DA44B1D3214555C600A55AC6 /* NSString+UriCompatibility.h in Headers */,
 				DA44B1DC214555C600A55AC6 /* MinMaxMacros.h in Headers */,
-				DA44B1D2214555C600A55AC6 /* DiffMatchPatch_Prefix.pch in Headers */,
 				F886645A1F4AD1EE0036D01B /* JWTAlgorithmRSBase.h in Headers */,
 				F886645F1F4AD1EE0036D01B /* JWTCryptoKeyExtractor.h in Headers */,
 				F88664651F4AD1EE0036D01B /* JWTClaimsSet.h in Headers */,
@@ -684,6 +684,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = 58B511D21A9E6C8500147676;
