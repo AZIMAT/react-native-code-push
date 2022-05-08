@@ -1,7 +1,8 @@
 /*
  * Diff Match and Patch
- * Copyright 2018 The diff-match-patch Authors.
- * https://github.com/google/diff-match-patch
+ *
+ * Copyright 2010 geheimwerk.de.
+ * http://code.google.com/p/google-diff-match-patch/
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +20,22 @@
  * ObjC port: jan@geheimwerk.de (Jan Weiß)
  */
 
-#import "NSString+UnicharUtilities.h"
+#if !defined(MIN)
+  #define MIN(A,B) \
+    ({__typeof__(A) a = (A); \
+      __typeof__(B) b = (B); \
+      (a < b) ? a : b; })
+#endif
 
+#if !defined(MAX)
+  #define MAX(A,B) \
+    ({__typeof__(A) a = (A); \
+      __typeof__(B) b = (B); \
+      (a > b) ? a : b; })
+#endif
 
-@implementation NSString (UnicharUtilities)
-
-+ (NSString *)diff_stringFromUnichar:(unichar)ch;
-{
-  CFStringRef c = CFStringCreateWithCharacters(kCFAllocatorDefault, &ch, 1);
-  CFMakeCollectable(c);
-  return [(NSString *)c autorelease];
-}
-
-- (NSString *)diff_substringWithCharacterAtIndex:(NSUInteger)anIndex;
-{
-  return [self substringWithRange:NSMakeRange(anIndex, 1)];
-}
-
-@end
+#if !defined(ABS)
+  #define ABS(A) \
+    ({__typeof__(A) a = (A); \
+      (a > 0) ? a : -a; })
+#endif

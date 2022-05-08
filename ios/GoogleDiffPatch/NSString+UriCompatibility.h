@@ -1,7 +1,8 @@
 /*
  * Diff Match and Patch
- * Copyright 2018 The diff-match-patch Authors.
- * https://github.com/google/diff-match-patch
+ *
+ * Copyright 2010 geheimwerk.de.
+ * http://code.google.com/p/google-diff-match-patch/
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,22 +20,12 @@
  * ObjC port: jan@geheimwerk.de (Jan Weiß)
  */
 
-#if !defined(MIN)
-  #define MIN(A,B) \
-    ({__typeof__(A) a = (A); \
-      __typeof__(B) b = (B); \
-      (a < b) ? a : b; })
-#endif
+#import <Foundation/Foundation.h>
 
-#if !defined(MAX)
-  #define MAX(A,B) \
-    ({__typeof__(A) a = (A); \
-      __typeof__(B) b = (B); \
-      (a > b) ? a : b; })
-#endif
 
-#if !defined(ABS)
-  #define ABS(A) \
-    ({__typeof__(A) a = (A); \
-      (a > 0) ? a : -a; })
-#endif
+@interface NSString (UriCompatibility)
+
+- (NSString *)diff_stringByAddingPercentEscapesForEncodeUriCompatibility;
+- (NSString *)diff_stringByReplacingPercentEscapesForEncodeUriCompatibility;
+
+@end

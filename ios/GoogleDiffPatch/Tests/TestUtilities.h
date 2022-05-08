@@ -1,7 +1,8 @@
 /*
  * Diff Match and Patch
- * Copyright 2018 The diff-match-patch Authors.
- * https://github.com/google/diff-match-patch
+ *
+ * Copyright 2011 geheimwerk.de.
+ * http://code.google.com/p/google-diff-match-patch/
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Author: fraser@google.com (Neil Fraser)
- * ObjC port: jan@geheimwerk.de (Jan Weiß)
+ * Author: jan@geheimwerk.de (Jan Weiß)
  */
 
-#import <Foundation/Foundation.h>
 
+#import <Cocoa/Cocoa.h>
 
-@interface NSString (JavaSubstring)
-
-- (NSString *)diff_javaSubstringFromStart:(NSUInteger)start toEnd:(NSUInteger)end;
-
-@end
+NSString * diff_stringForFilePath(NSString *aFilePath);
+NSString * diff_stringForURL(NSURL *aURL);

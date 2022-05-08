@@ -1,7 +1,8 @@
 /*
  * Diff Match and Patch
- * Copyright 2018 The diff-match-patch Authors.
- * https://github.com/google/diff-match-patch
+ *
+ * Copyright 2010 geheimwerk.de.
+ * http://code.google.com/p/google-diff-match-patch/
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +20,11 @@
  * ObjC port: jan@geheimwerk.de (Jan Weiß)
  */
 
-#import <Foundation/Foundation.h>
+#import <XCTest/XCTest.h>
 
 
-@interface NSString (UnicharUtilities)
+@interface DiffMatchPatchTest : XCTestCase {
 
-+ (NSString *)diff_stringFromUnichar:(unichar)ch;
-- (NSString *)diff_substringWithCharacterAtIndex:(NSUInteger)anIndex;
+}
 
 @end
