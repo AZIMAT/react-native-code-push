@@ -24,4 +24,5 @@ Pod::Spec.new do |s|
   s.dependency 'SSZipArchive', '~> 2.2.2'
   s.dependency 'JWT', '~> 3.0.0-beta.12'
   s.dependency 'Base64', '~> 1.1'
+  s.dependency 'DiffMatchPatch', :git => 'https://github.com/JanX2/google-diff-match-patch-Objective-C.git'
 end
